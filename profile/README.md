@@ -54,13 +54,6 @@ We like working with modern technologies, trying new ideas and actually building
 
 ---
 
-## ⚡ Recent Activity
-
-<!--START_SECTION:activity-->
-<!--END_SECTION:activity-->
-
----
-
 ## 🏆 Team Kaube Hall of Fame
 
 <!-- HALL_OF_FAME:START -->
