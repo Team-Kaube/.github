@@ -2,6 +2,7 @@ import json
 import os
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -9,7 +10,7 @@ from pathlib import Path
 
 
 # ============================================================
-# CONFIGURATION
+# CONFIG
 # ============================================================
 
 ORG = os.getenv("ORG", "Team-Kaube")
@@ -22,28 +23,23 @@ END_MARKER = "<!-- HALL_OF_FAME:END -->"
 
 API = "https://api.github.com"
 
-# Look at approximately the last 12 months
-CUTOFF = datetime.now(timezone.utc) - timedelta(days=365)
+DAYS = 365
+CUTOFF = datetime.now(timezone.utc) - timedelta(days=DAYS)
 
-# Overall score
 POINTS_PER_COMMIT = 1
 POINTS_PER_MERGED_PR = 5
-POINTS_PER_REVIEW = 3
 POINTS_PER_100_LINES = 1
+
+# Review stats are intentionally disabled in this optimized version.
+# Fetching reviews requires many API calls per PR.
+INCLUDE_REVIEWS = False
 
 
 # ============================================================
-# HELPERS
+# HTTP / API HELPERS
 # ============================================================
 
 def api_request(url, retries=10):
-    """
-    Make an authenticated request to the GitHub REST API.
-
-    GitHub statistics endpoints can return HTTP 202 while
-    statistics are being generated. In that case we retry.
-    """
-
     request = urllib.request.Request(
         url,
         headers={
@@ -59,15 +55,12 @@ def api_request(url, retries=10):
             with urllib.request.urlopen(request) as response:
                 status = response.status
 
-                # GitHub contributor statistics may need time
-                # to be generated.
+                # Contributor statistics may return 202 while GitHub builds them.
                 if status == 202:
                     print(
-                        f"Statistics still being generated "
+                        f"Stats still generating "
                         f"({attempt + 1}/{retries})"
                     )
-                    print(f"URL: {url}")
-
                     time.sleep(5)
                     continue
 
@@ -79,25 +72,65 @@ def api_request(url, retries=10):
                 return json.loads(body)
 
         except urllib.error.HTTPError as error:
+            remaining = error.headers.get("X-RateLimit-Remaining")
+            limit = error.headers.get("X-RateLimit-Limit")
+            reset = error.headers.get("X-RateLimit-Reset")
+
+            if error.code == 403 and remaining == "0":
+                print("")
+                print("========================================")
+                print(" GITHUB API RATE LIMIT EXCEEDED")
+                print("========================================")
+                print("")
+
+                if limit:
+                    print(f"Limit: {limit}")
+                print("Remaining: 0")
+
+                if reset:
+                    reset_time = datetime.fromtimestamp(
+                        int(reset),
+                        tz=timezone.utc,
+                    )
+
+                    now = datetime.now(timezone.utc)
+
+                    wait_seconds = max(
+                        0,
+                        int(
+                            (
+                                reset_time - now
+                            ).total_seconds()
+                        ),
+                    )
+
+                    print(
+                        f"Resets at: {reset_time.isoformat()}"
+                    )
+                    print(
+                        f"Wait: about "
+                        f"{wait_seconds // 60} minutes"
+                    )
+
+                raise RuntimeError(
+                    "GitHub API rate limit exceeded."
+                )
+
             try:
-                response_body = error.read().decode("utf-8")
+                body = error.read().decode("utf-8")
             except Exception:
-                response_body = ""
+                body = ""
 
             print("")
-            print("GitHub API error")
-            print(f"Status: {error.code}")
+            print(f"GitHub API error {error.code}")
             print(f"URL: {url}")
-            print(response_body)
+            print(body)
             print("")
 
             return None
 
         except urllib.error.URLError as error:
-            print("")
             print(f"Network error: {error}")
-            print(f"URL: {url}")
-            print("")
 
             if attempt < retries - 1:
                 time.sleep(5)
@@ -105,22 +138,10 @@ def api_request(url, retries=10):
 
             return None
 
-    print("")
-    print(
-        f"No response available after "
-        f"{retries} attempts:"
-    )
-    print(url)
-    print("")
-
     return None
 
 
 def paginated(url):
-    """
-    Yield all items from a paginated GitHub API endpoint.
-    """
-
     page = 1
 
     while True:
@@ -139,13 +160,11 @@ def paginated(url):
 
         if not isinstance(data, list):
             print(
-                f"Expected list response but received "
-                f"{type(data).__name__}"
+                f"Expected list response from {page_url}"
             )
-            print(f"URL: {page_url}")
             break
 
-        if len(data) == 0:
+        if not data:
             break
 
         yield from data
@@ -154,15 +173,6 @@ def paginated(url):
             break
 
         page += 1
-
-
-def parse_date(value):
-    if not value:
-        return None
-
-    return datetime.fromisoformat(
-        value.replace("Z", "+00:00")
-    )
 
 
 def is_bot(username):
@@ -193,12 +203,12 @@ def github_profile(username):
     )
 
 
-def format_number(value):
+def number(value):
     return f"{value:,}"
 
 
 # ============================================================
-# DATA STORAGE
+# STORAGE
 # ============================================================
 
 stats = defaultdict(
@@ -214,7 +224,7 @@ stats = defaultdict(
 
 
 # ============================================================
-# LOAD ORGANIZATION REPOSITORIES
+# LOAD ALL ACCESSIBLE ORG REPOS
 # ============================================================
 
 print("")
@@ -224,10 +234,8 @@ print("========================================")
 print("")
 
 print(f"Organization: {ORG}")
-print(f"Cutoff date: {CUTOFF.isoformat()}")
-print("")
-
-print("Loading organization repositories...")
+print(f"Period: last {DAYS} days")
+print(f"Cutoff: {CUTOFF.isoformat()}")
 print("")
 
 repositories = []
@@ -240,35 +248,28 @@ repo_url = (
 )
 
 for repo in paginated(repo_url):
-
-    # Ignore forks to prevent upstream code from
-    # distorting the leaderboard.
     if repo.get("fork"):
-        print(
-            f"Skipping fork: "
-            f"{repo.get('name', 'unknown')}"
-        )
         continue
 
-    # Ignore archived repositories.
     if repo.get("archived"):
-        print(
-            f"Skipping archived repo: "
-            f"{repo.get('name', 'unknown')}"
-        )
         continue
 
     repositories.append(repo)
 
 
-print("")
+if not repositories:
+    raise RuntimeError(
+        "No repositories were returned. "
+        "Check PAT access or GitHub API rate limits."
+    )
+
+
 print(
     f"Found {len(repositories)} accessible repositories."
 )
 print("")
 
-print("Repositories visible to leaderboard token:")
-print("")
+print("Visible repositories:")
 
 for repo in repositories:
     visibility = repo.get("visibility")
@@ -281,175 +282,18 @@ for repo in repositories:
         )
 
     print(
-        f" - {repo['name']} "
-        f"({visibility})"
+        f" - {repo['name']} ({visibility})"
     )
 
 print("")
 
 
-if len(repositories) == 0:
-    raise RuntimeError(
-        "The token cannot see any Team-Kaube repositories. "
-        "Check HALL_OF_FAME_TOKEN permissions and "
-        "organization approval."
-    )
-
-
 # ============================================================
-# COMMIT + CODE STATISTICS
+# CONTRIBUTORS / COMMITS / LINES
 # ============================================================
 
-print("")
 print("========================================")
-print(" Collecting commit statistics")
-print("========================================")
-print("")
-
-
-for index, repo in enumerate(
-    repositories,
-    start=1,
-):
-    repo_name = repo["name"]
-
-    visibility = repo.get("visibility")
-
-    if not visibility:
-        visibility = (
-            "private"
-            if repo.get("private")
-            else "public"
-        )
-
-    print(
-        f"[{index}/{len(repositories)}] "
-        f"{repo_name} ({visibility})"
-    )
-
-    contributor_url = (
-        f"{API}/repos/{ORG}/{repo_name}"
-        f"/stats/contributors"
-    )
-
-    contributors = api_request(
-        contributor_url,
-        retries=10,
-    )
-
-    if contributors is None:
-        print(
-            f"  No contributor statistics "
-            f"available for {repo_name}"
-        )
-        print("")
-        continue
-
-    if not isinstance(contributors, list):
-        print(
-            f"  Invalid contributor response "
-            f"for {repo_name}"
-        )
-        print("")
-        continue
-
-    print(
-        f"  Contributors returned: "
-        f"{len(contributors)}"
-    )
-
-    repo_commits = 0
-    repo_additions = 0
-    repo_deletions = 0
-
-    for contributor in contributors:
-        author = contributor.get("author")
-
-        # Commits that cannot be mapped to a GitHub
-        # account have no author object.
-        if not author:
-            continue
-
-        username = author.get("login")
-
-        if not username:
-            continue
-
-        if is_bot(username):
-            continue
-
-        contributor_commits = 0
-        contributor_additions = 0
-        contributor_deletions = 0
-
-        for week in contributor.get("weeks", []):
-            timestamp = week.get("w")
-
-            if timestamp is None:
-                continue
-
-            week_date = datetime.fromtimestamp(
-                timestamp,
-                tz=timezone.utc,
-            )
-
-            if week_date < CUTOFF:
-                continue
-
-            commits = week.get("c", 0)
-            additions = week.get("a", 0)
-            deletions = week.get("d", 0)
-
-            contributor_commits += commits
-            contributor_additions += additions
-            contributor_deletions += deletions
-
-        if (
-            contributor_commits == 0
-            and contributor_additions == 0
-            and contributor_deletions == 0
-        ):
-            continue
-
-        stats[username]["commits"] += (
-            contributor_commits
-        )
-
-        stats[username]["additions"] += (
-            contributor_additions
-        )
-
-        stats[username]["deletions"] += (
-            contributor_deletions
-        )
-
-        repo_commits += contributor_commits
-        repo_additions += contributor_additions
-        repo_deletions += contributor_deletions
-
-        print(
-            f"    {username}: "
-            f"{contributor_commits} commits, "
-            f"+{contributor_additions}, "
-            f"-{contributor_deletions}"
-        )
-
-    print(
-        f"  Repository total: "
-        f"{repo_commits} commits, "
-        f"+{repo_additions}, "
-        f"-{repo_deletions}"
-    )
-    print("")
-
-
-# ============================================================
-# PULL REQUESTS + REVIEWS
-# ============================================================
-
-print("")
-print("========================================")
-print(" Collecting pull request statistics")
+print(" Contributor statistics")
 print("========================================")
 print("")
 
@@ -465,101 +309,126 @@ for index, repo in enumerate(
         f"{repo_name}"
     )
 
-    pull_url = (
-        f"{API}/repos/{ORG}/{repo_name}/pulls"
-        f"?state=all"
-        f"&sort=updated"
-        f"&direction=desc"
+    url = (
+        f"{API}/repos/{ORG}/{repo_name}"
+        f"/stats/contributors"
     )
 
-    repo_prs = 0
-    repo_reviews = 0
+    contributors = api_request(url)
 
-    for pull in paginated(pull_url):
-        updated_at = parse_date(
-            pull.get("updated_at")
-        )
+    if contributors is None:
+        print("  No contributor stats available.")
+        continue
 
-        # Since results are sorted newest first,
-        # we can stop once PRs become too old.
-        if (
-            updated_at
-            and updated_at < CUTOFF
-        ):
-            break
+    if not isinstance(contributors, list):
+        print("  Invalid contributor response.")
+        continue
 
-        username = (
-            pull.get("user") or {}
-        ).get("login")
+    for contributor in contributors:
+        author = contributor.get("author")
 
-        merged_at = parse_date(
-            pull.get("merged_at")
-        )
+        if not author:
+            continue
 
-        if (
-            username
-            and not is_bot(username)
-            and merged_at
-            and merged_at >= CUTOFF
-        ):
-            stats[username]["merged_prs"] += 1
-            repo_prs += 1
+        username = author.get("login")
 
-        # ----------------------------------------------------
-        # REVIEWS
-        #
-        # One user counts at most once per PR.
-        # Multiple review submissions on the same PR do not
-        # artificially increase the number.
-        # ----------------------------------------------------
+        if not username or is_bot(username):
+            continue
 
-        reviewers_on_pr = set()
+        commits = 0
+        additions = 0
+        deletions = 0
 
-        reviews_url = (
-            f"{API}/repos/{ORG}/{repo_name}"
-            f"/pulls/{pull['number']}/reviews"
-        )
+        for week in contributor.get("weeks", []):
+            timestamp = week.get("w")
 
-        for review in paginated(reviews_url):
-            reviewer = (
-                review.get("user") or {}
-            ).get("login")
+            if timestamp is None:
+                continue
 
-            submitted_at = parse_date(
-                review.get("submitted_at")
+            week_date = datetime.fromtimestamp(
+                timestamp,
+                tz=timezone.utc,
             )
 
-            if not reviewer:
+            if week_date < CUTOFF:
                 continue
 
-            if is_bot(reviewer):
-                continue
+            commits += week.get("c", 0)
+            additions += week.get("a", 0)
+            deletions += week.get("d", 0)
 
-            if not submitted_at:
-                continue
+        if (
+            commits == 0
+            and additions == 0
+            and deletions == 0
+        ):
+            continue
 
-            if submitted_at < CUTOFF:
-                continue
+        stats[username]["commits"] += commits
+        stats[username]["additions"] += additions
+        stats[username]["deletions"] += deletions
 
-            reviewers_on_pr.add(reviewer)
-
-        for reviewer in reviewers_on_pr:
-            stats[reviewer]["reviews"] += 1
-            repo_reviews += 1
-
-    print(
-        f"  Merged PRs: {repo_prs}"
-    )
-
-    print(
-        f"  Reviewed PRs: {repo_reviews}"
-    )
+        print(
+            f"  {username}: "
+            f"{commits} commits, "
+            f"+{additions}, "
+            f"-{deletions}"
+        )
 
     print("")
 
 
 # ============================================================
-# REMOVE EMPTY CONTRIBUTORS
+# MERGED PULL REQUESTS
+# ============================================================
+
+print("========================================")
+print(" Merged pull requests")
+print("========================================")
+print("")
+
+
+cutoff_date = CUTOFF.strftime("%Y-%m-%d")
+
+
+for username in list(stats.keys()):
+    print(f"Checking merged PRs for {username}...")
+
+    query = (
+        f"org:{ORG} "
+        f"is:pr "
+        f"is:merged "
+        f"author:{username} "
+        f"merged:>={cutoff_date}"
+    )
+
+    encoded_query = urllib.parse.quote(query)
+
+    url = (
+        f"{API}/search/issues"
+        f"?q={encoded_query}"
+        f"&per_page=1"
+    )
+
+    result = api_request(url)
+
+    if not result:
+        continue
+
+    total = result.get(
+        "total_count",
+        0,
+    )
+
+    stats[username]["merged_prs"] = total
+
+    print(
+        f"  {username}: {total} merged PRs"
+    )
+
+
+# ============================================================
+# REMOVE EMPTY USERS
 # ============================================================
 
 stats = {
@@ -567,61 +436,24 @@ stats = {
     for username, values in stats.items()
     if (
         values["commits"] > 0
-        or values["merged_prs"] > 0
-        or values["reviews"] > 0
         or values["additions"] > 0
+        or values["merged_prs"] > 0
     )
 }
 
 
-# ============================================================
-# FAIL IF NOTHING WAS COLLECTED
-# ============================================================
-
 if not stats:
-    print("")
-    print("========================================")
-    print(" ERROR")
-    print("========================================")
-    print("")
-    print(
-        "No contributor activity could be collected."
-    )
-    print("")
-    print("Possible reasons:")
-    print(
-        " - HALL_OF_FAME_TOKEN is not approved "
-        "for Team-Kaube"
-    )
-    print(
-        " - The token does not have access to "
-        "the organization repositories"
-    )
-    print(
-        " - The token is missing required "
-        "read permissions"
-    )
-    print(
-        " - GitHub contributor statistics "
-        "have not finished generating"
-    )
-    print(
-        " - The repositories have no activity "
-        "during the selected time period"
-    )
-    print("")
-
     raise RuntimeError(
-        "No contributor statistics were collected."
+        "No contributor activity was collected. "
+        "The README will not be overwritten."
     )
 
 
 # ============================================================
-# CALCULATE SCORE
+# SCORE
 # ============================================================
 
 for username, values in stats.items():
-
     line_points = (
         values["additions"]
         // 100
@@ -630,21 +462,14 @@ for username, values in stats.items():
     values["score"] = (
         values["commits"]
         * POINTS_PER_COMMIT
-
-        + values["merged_prs"]
+        +
+        values["merged_prs"]
         * POINTS_PER_MERGED_PR
-
-        + values["reviews"]
-        * POINTS_PER_REVIEW
-
-        + line_points
+        +
+        line_points
         * POINTS_PER_100_LINES
     )
 
-
-# ============================================================
-# SORT OVERALL LEADERBOARD
-# ============================================================
 
 ranking = sorted(
     stats.items(),
@@ -652,14 +477,14 @@ ranking = sorted(
         item[1]["score"],
         item[1]["commits"],
         item[1]["merged_prs"],
-        item[1]["reviews"],
+        item[1]["additions"],
     ),
     reverse=True,
 )
 
 
 # ============================================================
-# WINNER HELPERS
+# CATEGORY WINNERS
 # ============================================================
 
 def winner(metric):
@@ -679,17 +504,16 @@ def winner(metric):
 
 code_user, code_value = winner("additions")
 pr_user, pr_value = winner("merged_prs")
-review_user, review_value = winner("reviews")
 commit_user, commit_value = winner("commits")
 
 
 # ============================================================
-# CONSOLE LEADERBOARD
+# CONSOLE OUTPUT
 # ============================================================
 
 print("")
 print("========================================")
-print(" Collected leaderboard")
+print(" Final leaderboard")
 print("========================================")
 print("")
 
@@ -698,20 +522,16 @@ for position, (username, values) in enumerate(
     start=1,
 ):
     print(
-        f"{position}. "
-        f"{username} | "
+        f"{position}. {username} | "
         f"{values['score']} pts | "
         f"{values['commits']} commits | "
         f"{values['merged_prs']} PRs | "
-        f"{values['reviews']} reviews | "
         f"+{values['additions']} lines"
     )
 
-print("")
-
 
 # ============================================================
-# BUILD README SECTION
+# GENERATE README
 # ============================================================
 
 lines = [
@@ -721,7 +541,6 @@ lines = [
     "",
 ]
 
-
 medals = [
     "🥇",
     "🥈",
@@ -729,22 +548,19 @@ medals = [
 ]
 
 
-if ranking:
-    for position, (username, values) in enumerate(
-        ranking[:3]
-    ):
-        medal = medals[position]
-
-        lines.append(
-            f"{medal} "
-            f"{github_profile(username)} "
-            f"— **{format_number(values['score'])} pts**"
-        )
+for index, (username, values) in enumerate(
+    ranking[:3]
+):
+    lines.append(
+        f"{medals[index]} "
+        f"{github_profile(username)} "
+        f"— **{number(values['score'])} pts**"
+    )
 
 
-# ============================================================
+# ------------------------------------------------------------
 # CODE MACHINE
-# ============================================================
+# ------------------------------------------------------------
 
 lines.extend([
     "",
@@ -756,13 +572,13 @@ if code_user:
     lines.append(
         "Most code contributed: "
         f"**{github_profile(code_user)} "
-        f"— +{format_number(code_value)} lines**"
+        f"— +{number(code_value)} lines**"
     )
 
 
-# ============================================================
+# ------------------------------------------------------------
 # PR MASTER
-# ============================================================
+# ------------------------------------------------------------
 
 lines.extend([
     "",
@@ -774,39 +590,18 @@ if pr_user and pr_value > 0:
     lines.append(
         "Most merged pull requests: "
         f"**{github_profile(pr_user)} "
-        f"— {format_number(pr_value)} PRs**"
+        f"— {number(pr_value)} PRs**"
     )
 else:
     lines.append(
-        "_No merged pull requests during this period._"
+        "_No merged pull requests "
+        "during this period._"
     )
 
 
-# ============================================================
-# REVIEWER
-# ============================================================
-
-lines.extend([
-    "",
-    "### 👀 Reviewer",
-    "",
-])
-
-if review_user and review_value > 0:
-    lines.append(
-        "Most reviewed pull requests: "
-        f"**{github_profile(review_user)} "
-        f"— {format_number(review_value)} reviews**"
-    )
-else:
-    lines.append(
-        "_No pull request reviews during this period._"
-    )
-
-
-# ============================================================
+# ------------------------------------------------------------
 # COMMIT MACHINE
-# ============================================================
+# ------------------------------------------------------------
 
 lines.extend([
     "",
@@ -818,21 +613,21 @@ if commit_user:
     lines.append(
         "Most commits: "
         f"**{github_profile(commit_user)} "
-        f"— {format_number(commit_value)} commits**"
+        f"— {number(commit_value)} commits**"
     )
 
 
-# ============================================================
+# ------------------------------------------------------------
 # FULL LEADERBOARD
-# ============================================================
+# ------------------------------------------------------------
 
 lines.extend([
     "",
     "<details>",
     "<summary><strong>📊 Full leaderboard</strong></summary>",
     "",
-    "| Rank | Developer | Commits | Merged PRs | Reviews | Lines added | Lines removed | Score |",
-    "|---:|---|---:|---:|---:|---:|---:|---:|",
+    "| Rank | Developer | Commits | Merged PRs | Lines added | Lines removed | Score |",
+    "|---:|---|---:|---:|---:|---:|---:|",
 ])
 
 
@@ -852,12 +647,11 @@ for position, (username, values) in enumerate(
     lines.append(
         f"| {rank} "
         f"| {github_profile(username)} "
-        f"| {format_number(values['commits'])} "
-        f"| {format_number(values['merged_prs'])} "
-        f"| {format_number(values['reviews'])} "
-        f"| +{format_number(values['additions'])} "
-        f"| -{format_number(values['deletions'])} "
-        f"| **{format_number(values['score'])}** |"
+        f"| {number(values['commits'])} "
+        f"| {number(values['merged_prs'])} "
+        f"| +{number(values['additions'])} "
+        f"| -{number(values['deletions'])} "
+        f"| **{number(values['score'])}** |"
     )
 
 
@@ -866,9 +660,9 @@ lines.extend([
     "</details>",
     "",
     "<sub>",
-    "📅 Based on activity from approximately the last 12 months. "
+    f"📅 Based on activity from the last {DAYS} days. "
     "Statistics are aggregated across all Team-Kaube repositories "
-    "accessible to the leaderboard bot, including private repositories. "
+    "accessible to the leaderboard token, including private repositories. "
     "Private repository names, PR titles and commit messages are never "
     "written to this README.",
     "</sub>",
@@ -877,7 +671,6 @@ lines.extend([
     "🏆 Score: "
     "1 point per commit · "
     "5 points per merged PR · "
-    "3 points per reviewed PR · "
     "1 point per 100 added lines",
     "</sub>",
     "",
@@ -885,11 +678,11 @@ lines.extend([
 ])
 
 
-generated_section = "\n".join(lines)
+generated = "\n".join(lines)
 
 
 # ============================================================
-# UPDATE README
+# WRITE README
 # ============================================================
 
 if not README_PATH.exists():
@@ -905,13 +698,13 @@ readme = README_PATH.read_text(
 
 if START_MARKER not in readme:
     raise RuntimeError(
-        f"README is missing {START_MARKER}"
+        f"README missing {START_MARKER}"
     )
 
 
 if END_MARKER not in readme:
     raise RuntimeError(
-        f"README is missing {END_MARKER}"
+        f"README missing {END_MARKER}"
     )
 
 
@@ -926,21 +719,14 @@ after = readme.split(
 )[1]
 
 
-updated_readme = (
-    before
-    + generated_section
-    + after
-)
-
-
 README_PATH.write_text(
-    updated_readme,
+    before + generated + after,
     encoding="utf-8",
 )
 
 
 print("")
 print("========================================")
-print(" Hall of Fame generated successfully")
+print(" Hall of Fame updated successfully")
 print("========================================")
 print("")
