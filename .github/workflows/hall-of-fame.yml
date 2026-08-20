@@ -1,0 +1,62 @@
+name: 🏆 Update Hall of Fame
+
+on:
+  # Run automatically once per day.
+  schedule:
+    - cron: "0 4 * * *"
+
+  # Also allow manual execution:
+  # Actions → Update Hall of Fame → Run workflow
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hall-of-fame
+  cancel-in-progress: true
+
+jobs:
+  update-hall-of-fame:
+    name: Generate Team Kaube leaderboard
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout .github repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Generate Hall of Fame
+        env:
+          ORG: Team-Kaube
+
+          # PAT with read access to ALL Team-Kaube repositories.
+          GH_TOKEN: ${{ secrets.HALL_OF_FAME_TOKEN }}
+
+        run: |
+          python scripts/hall_of_fame.py
+
+      - name: Show generated changes
+        run: |
+          git diff -- profile/README.md || true
+
+      - name: Commit updated leaderboard
+        run: |
+          if git diff --quiet profile/README.md; then
+            echo "Hall of Fame is already up to date."
+            exit 0
+          fi
+
+          git config user.name "Team Kaube Bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add profile/README.md
+
+          git commit \
+            -m "chore: update Hall of Fame"
+
+          git push
