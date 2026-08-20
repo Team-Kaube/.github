@@ -57,7 +57,43 @@ We like working with modern technologies, trying new ideas and actually building
 ## 🏆 Team Kaube Hall of Fame
 
 <!-- HALL_OF_FAME:START -->
-_Leaderboard is generated automatically._
+
+### 👑 Overall
+
+_No contribution data found yet._
+
+### 💻 Code Machine
+
+_No data yet._
+
+### 🔀 PR Master
+
+_No data yet._
+
+### 👀 Reviewer
+
+_No data yet._
+
+### 🔥 Commit Machine
+
+_No data yet._
+
+<details>
+<summary><strong>📊 Full leaderboard</strong></summary>
+
+| Rank | Developer | Commits | Merged PRs | Reviews | Lines added | Lines removed | Score |
+|---:|---|---:|---:|---:|---:|---:|---:|
+
+</details>
+
+<sub>
+📅 Based on activity from approximately the last 12 months. Statistics are aggregated across all Team-Kaube repositories accessible to the leaderboard bot, including private repositories. Private repository names, commit messages and PR titles are never written to this README.
+</sub>
+
+<sub>
+🏆 Score: 1 point per commit · 5 points per merged PR · 3 points per reviewed PR · 1 point per 100 added lines
+</sub>
+
 <!-- HALL_OF_FAME:END -->
 
 ---
