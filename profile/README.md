@@ -60,38 +60,40 @@ We like working with modern technologies, trying new ideas and actually building
 
 ### 👑 Overall
 
-_No contribution data found yet._
+🥇 [@AelBanyardWavestone](https://github.com/AelBanyardWavestone) — **69 pts**
+🥈 [@claude](https://github.com/claude) — **69 pts**
+🥉 [@AelElliotBanyard](https://github.com/AelElliotBanyard) — **32 pts**
 
 ### 💻 Code Machine
 
-_No data yet._
+Most code contributed: **[@AelBanyardWavestone](https://github.com/AelBanyardWavestone) — +6,640 lines**
 
 ### 🔀 PR Master
 
-_No data yet._
-
-### 👀 Reviewer
-
-_No data yet._
+_No merged pull requests during this period._
 
 ### 🔥 Commit Machine
 
-_No data yet._
+Most commits: **[@AelElliotBanyard](https://github.com/AelElliotBanyard) — 9 commits**
 
 <details>
 <summary><strong>📊 Full leaderboard</strong></summary>
 
-| Rank | Developer | Commits | Merged PRs | Reviews | Lines added | Lines removed | Score |
-|---:|---|---:|---:|---:|---:|---:|---:|
+| Rank | Developer | Commits | Merged PRs | Lines added | Lines removed | Score |
+|---:|---|---:|---:|---:|---:|---:|
+| 🥇 | [@AelBanyardWavestone](https://github.com/AelBanyardWavestone) | 3 | 0 | +6,640 | -103 | **69** |
+| 🥈 | [@claude](https://github.com/claude) | 3 | 0 | +6,640 | -103 | **69** |
+| 🥉 | [@AelElliotBanyard](https://github.com/AelElliotBanyard) | 9 | 0 | +2,381 | -1,495 | **32** |
+| 4 | [@evanlueber](https://github.com/evanlueber) | 1 | 0 | +23 | -0 | **1** |
 
 </details>
 
 <sub>
-📅 Based on activity from approximately the last 12 months. Statistics are aggregated across all Team-Kaube repositories accessible to the leaderboard bot, including private repositories. Private repository names, commit messages and PR titles are never written to this README.
+📅 Based on activity from the last 365 days. Statistics are aggregated across all Team-Kaube repositories accessible to the leaderboard token, including private repositories. Private repository names, PR titles and commit messages are never written to this README.
 </sub>
 
 <sub>
-🏆 Score: 1 point per commit · 5 points per merged PR · 3 points per reviewed PR · 1 point per 100 added lines
+🏆 Score: 1 point per commit · 5 points per merged PR · 1 point per 100 added lines
 </sub>
 
 <!-- HALL_OF_FAME:END -->
