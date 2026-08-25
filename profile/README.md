@@ -60,13 +60,13 @@ We like working with modern technologies, trying new ideas and actually building
 
 ### 👑 Overall
 
-🥇 [@AelBanyardWavestone](https://github.com/AelBanyardWavestone) — **69 pts**
+🥇 [@AelElliotBanyard](https://github.com/AelElliotBanyard) — **108 pts**
 🥈 [@claude](https://github.com/claude) — **69 pts**
-🥉 [@AelElliotBanyard](https://github.com/AelElliotBanyard) — **32 pts**
+🥉 [@evanlueber](https://github.com/evanlueber) — **3 pts**
 
 ### 💻 Code Machine
 
-Most code contributed: **[@AelBanyardWavestone](https://github.com/AelBanyardWavestone) — +6,640 lines**
+Most code contributed: **[@AelElliotBanyard](https://github.com/AelElliotBanyard) — +9,534 lines**
 
 ### 🔀 PR Master
 
@@ -74,17 +74,16 @@ _No merged pull requests during this period._
 
 ### 🔥 Commit Machine
 
-Most commits: **[@AelElliotBanyard](https://github.com/AelElliotBanyard) — 9 commits**
+Most commits: **[@AelElliotBanyard](https://github.com/AelElliotBanyard) — 13 commits**
 
 <details>
 <summary><strong>📊 Full leaderboard</strong></summary>
 
 | Rank | Developer | Commits | Merged PRs | Lines added | Lines removed | Score |
 |---:|---|---:|---:|---:|---:|---:|
-| 🥇 | [@AelBanyardWavestone](https://github.com/AelBanyardWavestone) | 3 | 0 | +6,640 | -103 | **69** |
+| 🥇 | [@AelElliotBanyard](https://github.com/AelElliotBanyard) | 13 | 0 | +9,534 | -1,716 | **108** |
 | 🥈 | [@claude](https://github.com/claude) | 3 | 0 | +6,640 | -103 | **69** |
-| 🥉 | [@AelElliotBanyard](https://github.com/AelElliotBanyard) | 9 | 0 | +2,381 | -1,495 | **32** |
-| 4 | [@evanlueber](https://github.com/evanlueber) | 1 | 0 | +23 | -0 | **1** |
+| 🥉 | [@evanlueber](https://github.com/evanlueber) | 2 | 0 | +109 | -75 | **3** |
 
 </details>
 
