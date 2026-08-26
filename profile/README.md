@@ -60,28 +60,28 @@ We like working with modern technologies, trying new ideas and actually building
 
 ### 👑 Overall
 
-🥇 [@AelElliotBanyard](https://github.com/AelElliotBanyard) — **108 pts**
+🥇 [@AelElliotBanyard](https://github.com/AelElliotBanyard) — **154 pts**
 🥈 [@claude](https://github.com/claude) — **69 pts**
 🥉 [@evanlueber](https://github.com/evanlueber) — **3 pts**
 
 ### 💻 Code Machine
 
-Most code contributed: **[@AelElliotBanyard](https://github.com/AelElliotBanyard) — +9,534 lines**
+Most code contributed: **[@AelElliotBanyard](https://github.com/AelElliotBanyard) — +12,811 lines**
 
 ### 🔀 PR Master
 
-_No merged pull requests during this period._
+Most merged pull requests: **[@AelElliotBanyard](https://github.com/AelElliotBanyard) — 2 PRs**
 
 ### 🔥 Commit Machine
 
-Most commits: **[@AelElliotBanyard](https://github.com/AelElliotBanyard) — 13 commits**
+Most commits: **[@AelElliotBanyard](https://github.com/AelElliotBanyard) — 16 commits**
 
 <details>
 <summary><strong>📊 Full leaderboard</strong></summary>
 
 | Rank | Developer | Commits | Merged PRs | Lines added | Lines removed | Score |
 |---:|---|---:|---:|---:|---:|---:|
-| 🥇 | [@AelElliotBanyard](https://github.com/AelElliotBanyard) | 13 | 0 | +9,534 | -1,716 | **108** |
+| 🥇 | [@AelElliotBanyard](https://github.com/AelElliotBanyard) | 16 | 2 | +12,811 | -1,741 | **154** |
 | 🥈 | [@claude](https://github.com/claude) | 3 | 0 | +6,640 | -103 | **69** |
 | 🥉 | [@evanlueber](https://github.com/evanlueber) | 2 | 0 | +109 | -75 | **3** |
 
